@@ -1,0 +1,27 @@
+[package]
+name = "discord-mcp-rs"
+version = "0.1.0"
+edition = "2021"
+description = "Discord MCP server exposing the Discord REST API as MCP tools"
+
+[dependencies]
+# MCP SDK
+rmcp = { version = "0.17", features = ["server", "transport-io"] }
+
+# Discord REST client
+twilight-http = "0.17"
+twilight-model = "0.17"
+
+# Async runtime
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-std"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Logging (must write to stderr to avoid polluting stdio MCP transport)
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "std", "fmt"] }
+
+# Error handling
+anyhow = "1"
