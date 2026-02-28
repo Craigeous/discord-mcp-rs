@@ -9,6 +9,10 @@ mod util;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("Failed to install rustls crypto provider");
+
     // Logging must go to stderr — stdout is the MCP stdio transport
     tracing_subscriber::fmt()
         .with_env_filter(

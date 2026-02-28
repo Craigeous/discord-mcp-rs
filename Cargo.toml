@@ -23,5 +23,8 @@ serde_json = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "std", "fmt"] }
 
+# TLS crypto provider (required by rustls)
+rustls = { version = "0.23", features = ["ring"] }
+
 # Error handling
 anyhow = "1"
