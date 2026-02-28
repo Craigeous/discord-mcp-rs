@@ -33,7 +33,6 @@ A Rust-based [MCP](https://modelcontextprotocol.io/) server that exposes the Dis
 
 ## Prerequisites
 
-- [Rust](https://rustup.rs/) (1.70+)
 - A Discord bot token ([create one here](https://discord.com/developers/applications))
 
 ## Setup
@@ -46,7 +45,30 @@ A Rust-based [MCP](https://modelcontextprotocol.io/) server that exposes the Dis
 4. Under **Privileged Gateway Intents**, enable **Server Members Intent** (needed for member listing/searching)
 5. Go to **OAuth2** > **URL Generator**, select the `bot` scope, choose your permissions, and use the generated URL to invite the bot to your server
 
-### 2. Build
+### 2. Install
+
+#### Option A: Download a prebuilt binary (recommended)
+
+Download the latest binary for your platform from [Releases](https://github.com/Craigeous/discord-mcp-rs/releases/latest):
+
+| Platform | Binary |
+|---|---|
+| macOS (Apple Silicon) | `discord-mcp-rs-aarch64-apple-darwin` |
+| macOS (Intel) | `discord-mcp-rs-x86_64-apple-darwin` |
+| Linux (x86_64) | `discord-mcp-rs-x86_64-unknown-linux-gnu` |
+| Linux (arm64) | `discord-mcp-rs-aarch64-unknown-linux-gnu` |
+| Windows (x86_64) | `discord-mcp-rs-x86_64-pc-windows-msvc.exe` |
+
+```bash
+# Example: macOS Apple Silicon
+curl -L -o discord-mcp-rs \
+  https://github.com/Craigeous/discord-mcp-rs/releases/latest/download/discord-mcp-rs-aarch64-apple-darwin
+chmod +x discord-mcp-rs
+```
+
+#### Option B: Build from source
+
+Requires [Rust](https://rustup.rs/) (1.70+).
 
 ```bash
 git clone https://github.com/Craigeous/discord-mcp-rs.git
@@ -57,6 +79,8 @@ cargo build --release
 The binary will be at `target/release/discord-mcp-rs`.
 
 ### 3. Configure your MCP client
+
+> **Note:** Replace `/path/to/discord-mcp-rs` below with the actual path to your binary (downloaded or built).
 
 #### Claude Code
 

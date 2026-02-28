@@ -204,7 +204,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "discord-mcp-server"
+name = "discord-mcp-rs"
 version = "0.1.0"
 dependencies = [
  "anyhow",
