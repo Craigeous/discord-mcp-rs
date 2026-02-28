@@ -4,8 +4,8 @@ Rust-based MCP server providing Discord API tools via stdio transport.
 
 ## Build & Run
 - `cargo build --release` to build
-- `DISCORD_TOKEN="Bot YOUR_TOKEN" cargo run` to run
-- `RUST_LOG=debug DISCORD_TOKEN="Bot YOUR_TOKEN" cargo run` for verbose logging
+- `DISCORD_TOKEN="YOUR_TOKEN" cargo run` to run
+- `RUST_LOG=debug DISCORD_TOKEN="YOUR_TOKEN" cargo run` for verbose logging
 
 ## Architecture
 - `src/main.rs`: Entry point, stdio transport setup

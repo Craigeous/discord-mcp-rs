@@ -92,7 +92,7 @@ Add to your Claude Code MCP settings (`~/.claude/settings.json` or project `.cla
     "discord": {
       "command": "/path/to/discord-mcp-rs",
       "env": {
-        "DISCORD_TOKEN": "Bot YOUR_TOKEN_HERE"
+        "DISCORD_TOKEN": "YOUR_TOKEN_HERE"
       }
     }
   }
@@ -109,7 +109,7 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
     "discord": {
       "command": "/path/to/discord-mcp-rs",
       "env": {
-        "DISCORD_TOKEN": "Bot YOUR_TOKEN_HERE"
+        "DISCORD_TOKEN": "YOUR_TOKEN_HERE"
       }
     }
   }
@@ -134,7 +134,7 @@ It should call `get_current_user` and `list_guilds` and return your bot's info a
 ## Debug Logging
 
 ```bash
-RUST_LOG=debug DISCORD_TOKEN="Bot YOUR_TOKEN" cargo run
+RUST_LOG=debug DISCORD_TOKEN="YOUR_TOKEN" cargo run
 ```
 
 Logs go to stderr so they don't interfere with the MCP stdio transport.
