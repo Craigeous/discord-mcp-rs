@@ -26,5 +26,8 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "std", "fmt"] 
 # TLS crypto provider (required by rustls)
 rustls = { version = "0.23", features = ["ring"] }
 
+# HTTP client for raw Discord API calls (endpoints not in twilight-http)
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
 # Error handling
 anyhow = "1"

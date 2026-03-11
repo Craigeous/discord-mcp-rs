@@ -5,7 +5,7 @@ use serde::Deserialize;
 use twilight_http::Client;
 use twilight_model::channel::ChannelType;
 
-use crate::error::{discord_api_error, deserialize_error, json_result};
+use crate::error::{discord_api_error, deserialize_error, json_result, text_result};
 use crate::util::parse_id;
 
 // -- list_guild_channels --
@@ -233,6 +233,54 @@ pub async fn update_channel_positions(
 
     match discord.update_guild_channel_positions(guild_id, &twilight_positions).await {
         Ok(_) => crate::error::text_result("Channel positions updated successfully"),
+        Err(e) => discord_api_error(e),
+    }
+}
+
+// -- follow_announcement_channel --
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct FollowAnnouncementChannelParams {
+    /// The announcement channel ID to follow
+    pub channel_id: String,
+    /// The target channel ID to receive crossposted messages
+    pub webhook_channel_id: String,
+}
+
+pub async fn follow_announcement_channel(
+    discord: &Arc<Client>,
+    params: FollowAnnouncementChannelParams,
+) -> Result<CallToolResult, rmcp::ErrorData> {
+    let channel_id = parse_id(&params.channel_id)?;
+    let webhook_channel_id = parse_id(&params.webhook_channel_id)?;
+    let response = match discord
+        .follow_news_channel(channel_id, webhook_channel_id)
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => return discord_api_error(e),
+    };
+    match response.model().await {
+        Ok(followed) => json_result(&followed),
+        Err(e) => deserialize_error(e),
+    }
+}
+
+// -- trigger_typing_indicator --
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct TriggerTypingIndicatorParams {
+    /// The channel ID to show typing in
+    pub channel_id: String,
+}
+
+pub async fn trigger_typing_indicator(
+    discord: &Arc<Client>,
+    params: TriggerTypingIndicatorParams,
+) -> Result<CallToolResult, rmcp::ErrorData> {
+    let channel_id = parse_id(&params.channel_id)?;
+    match discord.create_typing_trigger(channel_id).await {
+        Ok(_) => text_result("Typing indicator triggered"),
         Err(e) => discord_api_error(e),
     }
 }

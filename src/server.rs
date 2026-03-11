@@ -6,26 +6,67 @@ use rmcp::{
     tool, tool_handler, tool_router,
 };
 use twilight_http::Client as DiscordClient;
+use twilight_model::id::{marker::ApplicationMarker, Id};
 
 use crate::tools;
 
 #[derive(Clone)]
 pub struct DiscordMcpServer {
     discord: Arc<DiscordClient>,
+    http: Arc<reqwest::Client>,
+    token: String,
+    application_id: Id<ApplicationMarker>,
     #[allow(dead_code)]
     tool_router: ToolRouter<Self>,
 }
 
 #[tool_router]
 impl DiscordMcpServer {
-    pub fn from_env() -> anyhow::Result<Self> {
+    pub async fn from_env() -> anyhow::Result<Self> {
         let token = std::env::var("DISCORD_TOKEN")
             .map_err(|_| anyhow::anyhow!("DISCORD_TOKEN environment variable not set"))?;
-        let discord = Arc::new(DiscordClient::new(token));
+        let discord = Arc::new(DiscordClient::new(token.clone()));
+        let http = Arc::new(reqwest::Client::new());
+
+        // Resolve application ID: env var or auto-detect from current user
+        let application_id = if let Ok(app_id_str) = std::env::var("DISCORD_APPLICATION_ID") {
+            let raw: u64 = app_id_str.parse().map_err(|_| {
+                anyhow::anyhow!("DISCORD_APPLICATION_ID must be a numeric snowflake ID")
+            })?;
+            Id::new(raw)
+        } else {
+            tracing::info!("DISCORD_APPLICATION_ID not set, auto-detecting from current user...");
+            let user = discord
+                .current_user()
+                .await?
+                .model()
+                .await?;
+            let id = user.id.get();
+            tracing::info!("Auto-detected application ID: {id}");
+            Id::new(id)
+        };
+
         Ok(Self {
             discord,
+            http,
+            token,
+            application_id,
             tool_router: Self::tool_router(),
         })
+    }
+
+    /// Build a raw Discord API request with bot authorization.
+    pub fn raw_request(&self, method: reqwest::Method, path: &str) -> reqwest::RequestBuilder {
+        let url = format!("https://discord.com/api/v10{path}");
+        self.http
+            .request(method, &url)
+            .header("Authorization", format!("Bot {}", self.token))
+    }
+
+    /// Get the application ID.
+    #[allow(dead_code)]
+    pub fn application_id(&self) -> Id<ApplicationMarker> {
+        self.application_id
     }
 
     // ========================
@@ -776,6 +817,581 @@ impl DiscordMcpServer {
         Parameters(params): Parameters<tools::permissions::DeleteChannelPermissionParams>,
     ) -> Result<CallToolResult, rmcp::ErrorData> {
         tools::permissions::delete_channel_permission(&self.discord, params).await
+    }
+
+    // ========================
+    // STAGE INSTANCES
+    // ========================
+
+    #[tool(description = "Create a stage instance for a stage channel")]
+    async fn create_stage_instance(
+        &self,
+        Parameters(params): Parameters<tools::stage_instances::CreateStageInstanceParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::stage_instances::create_stage_instance(&self.discord, params).await
+    }
+
+    #[tool(description = "Get the stage instance for a stage channel")]
+    async fn get_stage_instance(
+        &self,
+        Parameters(params): Parameters<tools::stage_instances::GetStageInstanceParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::stage_instances::get_stage_instance(&self.discord, params).await
+    }
+
+    #[tool(description = "Update a stage instance's topic or privacy level")]
+    async fn update_stage_instance(
+        &self,
+        Parameters(params): Parameters<tools::stage_instances::UpdateStageInstanceParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::stage_instances::update_stage_instance(&self.discord, params).await
+    }
+
+    #[tool(description = "Delete a stage instance")]
+    async fn delete_stage_instance(
+        &self,
+        Parameters(params): Parameters<tools::stage_instances::DeleteStageInstanceParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::stage_instances::delete_stage_instance(&self.discord, params).await
+    }
+
+    // ========================
+    // VOICE
+    // ========================
+
+    #[tool(description = "List available voice regions")]
+    async fn list_voice_regions(&self) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::voice::list_voice_regions(&self.discord).await
+    }
+
+    #[tool(description = "Update the current user's voice state in a guild (e.g., suppress/request to speak in stage)")]
+    async fn update_current_user_voice_state(
+        &self,
+        Parameters(params): Parameters<tools::voice::UpdateCurrentUserVoiceStateParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::voice::update_current_user_voice_state(&self.discord, params).await
+    }
+
+    #[tool(description = "Update another user's voice state in a guild (e.g., suppress in stage channel)")]
+    async fn update_user_voice_state(
+        &self,
+        Parameters(params): Parameters<tools::voice::UpdateUserVoiceStateParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::voice::update_user_voice_state(&self.discord, params).await
+    }
+
+    // ========================
+    // USERS
+    // ========================
+
+    #[tool(description = "Get a user by ID")]
+    async fn get_user(
+        &self,
+        Parameters(params): Parameters<tools::users::GetUserParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::users::get_user(&self.discord, params).await
+    }
+
+    #[tool(description = "Create a DM channel with a user")]
+    async fn create_dm(
+        &self,
+        Parameters(params): Parameters<tools::users::CreateDmParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::users::create_dm(&self.discord, params).await
+    }
+
+    #[tool(description = "Leave a guild (server)")]
+    async fn leave_guild(
+        &self,
+        Parameters(params): Parameters<tools::users::LeaveGuildParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::users::leave_guild(&self.discord, params).await
+    }
+
+    #[tool(description = "Get the current user's connected accounts (Twitch, YouTube, etc.)")]
+    async fn get_current_user_connections(&self) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::users::get_current_user_connections(&self.discord).await
+    }
+
+    // ========================
+    // APPLICATION COMMANDS
+    // ========================
+
+    #[tool(description = "List all global application commands")]
+    async fn list_global_commands(&self) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::application_commands::list_global_commands(&self.discord, self.application_id).await
+    }
+
+    #[tool(description = "Create a global slash command")]
+    async fn create_global_command(
+        &self,
+        Parameters(params): Parameters<tools::application_commands::CreateGlobalCommandParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::application_commands::create_global_command(&self.discord, self.application_id, params).await
+    }
+
+    #[tool(description = "Update a global application command")]
+    async fn update_global_command(
+        &self,
+        Parameters(params): Parameters<tools::application_commands::UpdateGlobalCommandParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::application_commands::update_global_command(&self.discord, self.application_id, params).await
+    }
+
+    #[tool(description = "Delete a global application command")]
+    async fn delete_global_command(
+        &self,
+        Parameters(params): Parameters<tools::application_commands::DeleteGlobalCommandParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::application_commands::delete_global_command(&self.discord, self.application_id, params).await
+    }
+
+    #[tool(description = "List all application commands for a guild")]
+    async fn list_guild_commands(
+        &self,
+        Parameters(params): Parameters<tools::application_commands::ListGuildCommandsParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::application_commands::list_guild_commands(&self.discord, self.application_id, params).await
+    }
+
+    #[tool(description = "Create a guild-specific slash command")]
+    async fn create_guild_command(
+        &self,
+        Parameters(params): Parameters<tools::application_commands::CreateGuildCommandParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::application_commands::create_guild_command(&self.discord, self.application_id, params).await
+    }
+
+    #[tool(description = "Update a guild-specific application command")]
+    async fn update_guild_command(
+        &self,
+        Parameters(params): Parameters<tools::application_commands::UpdateGuildCommandParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::application_commands::update_guild_command(&self.discord, self.application_id, params).await
+    }
+
+    #[tool(description = "Delete a guild-specific application command")]
+    async fn delete_guild_command(
+        &self,
+        Parameters(params): Parameters<tools::application_commands::DeleteGuildCommandParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::application_commands::delete_guild_command(&self.discord, self.application_id, params).await
+    }
+
+    // ========================
+    // INTERACTIONS
+    // ========================
+
+    #[tool(description = "Respond to an interaction (e.g., slash command). Types: 1=pong, 4=channel_message, 5=deferred_channel_message, 6=deferred_update, 7=update_message")]
+    async fn create_interaction_response(
+        &self,
+        Parameters(params): Parameters<tools::interactions::CreateInteractionResponseParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::interactions::create_interaction_response(&self.discord, self.application_id, params).await
+    }
+
+    #[tool(description = "Get the original interaction response message")]
+    async fn get_original_response(
+        &self,
+        Parameters(params): Parameters<tools::interactions::GetOriginalResponseParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::interactions::get_original_response(&self.discord, self.application_id, params).await
+    }
+
+    #[tool(description = "Edit the original interaction response")]
+    async fn edit_original_response(
+        &self,
+        Parameters(params): Parameters<tools::interactions::EditOriginalResponseParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::interactions::edit_original_response(&self.discord, self.application_id, params).await
+    }
+
+    #[tool(description = "Delete the original interaction response")]
+    async fn delete_original_response(
+        &self,
+        Parameters(params): Parameters<tools::interactions::DeleteOriginalResponseParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::interactions::delete_original_response(&self.discord, self.application_id, params).await
+    }
+
+    #[tool(description = "Create a followup message for an interaction")]
+    async fn create_followup_message(
+        &self,
+        Parameters(params): Parameters<tools::interactions::CreateFollowupMessageParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::interactions::create_followup_message(&self.discord, self.application_id, params).await
+    }
+
+    #[tool(description = "Get a followup message for an interaction")]
+    async fn get_followup_message(
+        &self,
+        Parameters(params): Parameters<tools::interactions::GetFollowupMessageParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::interactions::get_followup_message(&self.discord, self.application_id, params).await
+    }
+
+    #[tool(description = "Edit a followup message for an interaction")]
+    async fn edit_followup_message(
+        &self,
+        Parameters(params): Parameters<tools::interactions::EditFollowupMessageParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::interactions::edit_followup_message(&self.discord, self.application_id, params).await
+    }
+
+    #[tool(description = "Delete a followup message for an interaction")]
+    async fn delete_followup_message(
+        &self,
+        Parameters(params): Parameters<tools::interactions::DeleteFollowupMessageParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::interactions::delete_followup_message(&self.discord, self.application_id, params).await
+    }
+
+    // ========================
+    // GUILD TEMPLATES
+    // ========================
+
+    #[tool(description = "Get a guild template by its code")]
+    async fn get_template(
+        &self,
+        Parameters(params): Parameters<tools::guild_templates::GetTemplateParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::guild_templates::get_template(&self.discord, params).await
+    }
+
+    #[tool(description = "List all templates for a guild")]
+    async fn list_guild_templates(
+        &self,
+        Parameters(params): Parameters<tools::guild_templates::ListGuildTemplatesParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::guild_templates::list_guild_templates(&self.discord, params).await
+    }
+
+    #[tool(description = "Create a template from a guild")]
+    async fn create_guild_template(
+        &self,
+        Parameters(params): Parameters<tools::guild_templates::CreateGuildTemplateParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::guild_templates::create_guild_template(&self.discord, params).await
+    }
+
+    #[tool(description = "Sync a guild template to the guild's current state")]
+    async fn sync_guild_template(
+        &self,
+        Parameters(params): Parameters<tools::guild_templates::SyncGuildTemplateParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::guild_templates::sync_guild_template(&self.discord, params).await
+    }
+
+    #[tool(description = "Update a guild template's name or description")]
+    async fn update_guild_template(
+        &self,
+        Parameters(params): Parameters<tools::guild_templates::UpdateGuildTemplateParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::guild_templates::update_guild_template(&self.discord, params).await
+    }
+
+    #[tool(description = "Delete a guild template")]
+    async fn delete_guild_template(
+        &self,
+        Parameters(params): Parameters<tools::guild_templates::DeleteGuildTemplateParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::guild_templates::delete_guild_template(&self.discord, params).await
+    }
+
+    // ========================
+    // POLLS
+    // ========================
+
+    #[tool(description = "Get voters for a specific poll answer")]
+    async fn get_poll_answer_voters(
+        &self,
+        Parameters(params): Parameters<tools::polls::GetPollAnswerVotersParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::polls::get_poll_answer_voters(&self.discord, params).await
+    }
+
+    #[tool(description = "Immediately end a poll")]
+    async fn end_poll(
+        &self,
+        Parameters(params): Parameters<tools::polls::EndPollParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::polls::end_poll(&self.discord, params).await
+    }
+
+    // ========================
+    // APPLICATION EMOJIS
+    // ========================
+
+    #[tool(description = "List all emojis for the application")]
+    async fn list_application_emojis(&self) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::emojis::list_application_emojis(&self.discord, self.application_id).await
+    }
+
+    #[tool(description = "Create a custom emoji for the application (requires base64 image data)")]
+    async fn create_application_emoji(
+        &self,
+        Parameters(params): Parameters<tools::emojis::CreateApplicationEmojiParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::emojis::create_application_emoji(&self.discord, self.application_id, params).await
+    }
+
+    #[tool(description = "Update an application emoji's name")]
+    async fn update_application_emoji(
+        &self,
+        Parameters(params): Parameters<tools::emojis::UpdateApplicationEmojiParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::emojis::update_application_emoji(&self.discord, self.application_id, params).await
+    }
+
+    #[tool(description = "Delete an application emoji")]
+    async fn delete_application_emoji(
+        &self,
+        Parameters(params): Parameters<tools::emojis::DeleteApplicationEmojiParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::emojis::delete_application_emoji(&self.discord, self.application_id, params).await
+    }
+
+    // ========================
+    // AUTOMOD (new tools)
+    // ========================
+
+    #[tool(description = "Create an auto-moderation rule in a guild. Trigger types: 1=keyword, 3=spam, 4=keyword_preset, 5=mention_spam")]
+    async fn create_automod_rule(
+        &self,
+        Parameters(params): Parameters<tools::automod::CreateAutomodRuleParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::automod::create_automod_rule(&self.discord, params).await
+    }
+
+    #[tool(description = "Update an auto-moderation rule")]
+    async fn update_automod_rule(
+        &self,
+        Parameters(params): Parameters<tools::automod::UpdateAutomodRuleParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::automod::update_automod_rule(&self.discord, params).await
+    }
+
+    // ========================
+    // SCHEDULED EVENTS (new tools)
+    // ========================
+
+    #[tool(description = "Create a scheduled event in a guild. Entity types: 1=stage_instance, 2=voice, 3=external")]
+    async fn create_scheduled_event(
+        &self,
+        Parameters(params): Parameters<tools::scheduled_events::CreateScheduledEventParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::scheduled_events::create_scheduled_event(&self.discord, params).await
+    }
+
+    #[tool(description = "Update a scheduled event")]
+    async fn update_scheduled_event(
+        &self,
+        Parameters(params): Parameters<tools::scheduled_events::UpdateScheduledEventParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::scheduled_events::update_scheduled_event(&self.discord, params).await
+    }
+
+    // ========================
+    // STICKERS (new tools)
+    // ========================
+
+    #[tool(description = "Get a sticker by ID (any sticker, not guild-specific)")]
+    async fn get_sticker(
+        &self,
+        Parameters(params): Parameters<tools::stickers::GetStickerParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::stickers::get_sticker(&self.discord, params).await
+    }
+
+    #[tool(description = "List all available Nitro sticker packs")]
+    async fn list_sticker_packs(&self) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::stickers::list_sticker_packs(&self.discord).await
+    }
+
+    // ========================
+    // GUILD SETTINGS (new tools)
+    // ========================
+
+    #[tool(description = "Delete a guild (server). The bot must be the owner.")]
+    async fn delete_guild(
+        &self,
+        Parameters(params): Parameters<tools::guild_settings::DeleteGuildParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::guild_settings::delete_guild(&self.discord, params).await
+    }
+
+    #[tool(description = "Get a guild's integrations (bots, apps, etc.)")]
+    async fn get_guild_integrations(
+        &self,
+        Parameters(params): Parameters<tools::guild_settings::GetGuildIntegrationsParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::guild_settings::get_guild_integrations(&self.discord, params).await
+    }
+
+    #[tool(description = "Create a new guild (server). Only available for bots in fewer than 10 guilds.")]
+    async fn create_guild(
+        &self,
+        Parameters(params): Parameters<tools::guild_settings::CreateGuildParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::guild_settings::create_guild(self, params).await
+    }
+
+    // ========================
+    // CHANNELS (new tools)
+    // ========================
+
+    #[tool(description = "Follow an announcement channel so messages are crossposted to a target channel")]
+    async fn follow_announcement_channel(
+        &self,
+        Parameters(params): Parameters<tools::channels::FollowAnnouncementChannelParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::channels::follow_announcement_channel(&self.discord, params).await
+    }
+
+    #[tool(description = "Trigger a typing indicator in a channel (lasts ~10 seconds)")]
+    async fn trigger_typing_indicator(
+        &self,
+        Parameters(params): Parameters<tools::channels::TriggerTypingIndicatorParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::channels::trigger_typing_indicator(&self.discord, params).await
+    }
+
+    // ========================
+    // THREADS (new tools)
+    // ========================
+
+    #[tool(description = "List private archived threads in a channel")]
+    async fn list_private_archived_threads(
+        &self,
+        Parameters(params): Parameters<tools::threads::ListPrivateArchivedThreadsParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::threads::list_private_archived_threads(&self.discord, params).await
+    }
+
+    // ========================
+    // BANS (new tools)
+    // ========================
+
+    #[tool(description = "Bulk ban up to 200 users from a guild")]
+    async fn bulk_guild_ban(
+        &self,
+        Parameters(params): Parameters<tools::bans::BulkGuildBanParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::bans::bulk_guild_ban(self, params).await
+    }
+
+    // ========================
+    // SOUNDBOARD
+    // ========================
+
+    #[tool(description = "Send a soundboard sound to a voice channel")]
+    async fn send_soundboard_sound(
+        &self,
+        Parameters(params): Parameters<tools::soundboard::SendSoundboardSoundParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::soundboard::send_soundboard_sound(self, params).await
+    }
+
+    #[tool(description = "List default soundboard sounds available to all guilds")]
+    async fn list_default_soundboard_sounds(&self) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::soundboard::list_default_soundboard_sounds(self).await
+    }
+
+    #[tool(description = "List all soundboard sounds in a guild")]
+    async fn list_guild_soundboard_sounds(
+        &self,
+        Parameters(params): Parameters<tools::soundboard::ListGuildSoundboardSoundsParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::soundboard::list_guild_soundboard_sounds(self, params).await
+    }
+
+    #[tool(description = "Get a specific soundboard sound in a guild")]
+    async fn get_guild_soundboard_sound(
+        &self,
+        Parameters(params): Parameters<tools::soundboard::GetGuildSoundboardSoundParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::soundboard::get_guild_soundboard_sound(self, params).await
+    }
+
+    #[tool(description = "Create a soundboard sound in a guild")]
+    async fn create_guild_soundboard_sound(
+        &self,
+        Parameters(params): Parameters<tools::soundboard::CreateGuildSoundboardSoundParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::soundboard::create_guild_soundboard_sound(self, params).await
+    }
+
+    #[tool(description = "Update a soundboard sound in a guild")]
+    async fn update_guild_soundboard_sound(
+        &self,
+        Parameters(params): Parameters<tools::soundboard::UpdateGuildSoundboardSoundParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::soundboard::update_guild_soundboard_sound(self, params).await
+    }
+
+    #[tool(description = "Delete a soundboard sound from a guild")]
+    async fn delete_guild_soundboard_sound(
+        &self,
+        Parameters(params): Parameters<tools::soundboard::DeleteGuildSoundboardSoundParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::soundboard::delete_guild_soundboard_sound(self, params).await
+    }
+
+    // ========================
+    // MONETIZATION
+    // ========================
+
+    #[tool(description = "List all SKUs for the application")]
+    async fn list_skus(&self) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::monetization::list_skus(self, self.application_id).await
+    }
+
+    #[tool(description = "List entitlements for the application, with optional filters")]
+    async fn list_entitlements(
+        &self,
+        Parameters(params): Parameters<tools::monetization::ListEntitlementsParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::monetization::list_entitlements(self, self.application_id, params).await
+    }
+
+    #[tool(description = "Get a specific entitlement by ID")]
+    async fn get_entitlement(
+        &self,
+        Parameters(params): Parameters<tools::monetization::GetEntitlementParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::monetization::get_entitlement(self, self.application_id, params).await
+    }
+
+    #[tool(description = "Create a test entitlement for testing monetization")]
+    async fn create_test_entitlement(
+        &self,
+        Parameters(params): Parameters<tools::monetization::CreateTestEntitlementParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::monetization::create_test_entitlement(self, self.application_id, params).await
+    }
+
+    #[tool(description = "Delete a test entitlement")]
+    async fn delete_test_entitlement(
+        &self,
+        Parameters(params): Parameters<tools::monetization::DeleteTestEntitlementParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::monetization::delete_test_entitlement(self, self.application_id, params).await
+    }
+
+    #[tool(description = "Mark a one-time purchase entitlement as consumed")]
+    async fn consume_entitlement(
+        &self,
+        Parameters(params): Parameters<tools::monetization::ConsumeEntitlementParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::monetization::consume_entitlement(self, self.application_id, params).await
+    }
+
+    #[tool(description = "List subscriptions for a SKU")]
+    async fn list_sku_subscriptions(
+        &self,
+        Parameters(params): Parameters<tools::monetization::ListSkuSubscriptionsParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::monetization::list_sku_subscriptions(self, params).await
     }
 }
 

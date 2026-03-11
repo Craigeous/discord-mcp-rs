@@ -25,7 +25,7 @@ async fn main() -> Result<()> {
 
     tracing::info!("Starting Discord MCP server");
 
-    let service = server::DiscordMcpServer::from_env()?;
+    let service = server::DiscordMcpServer::from_env().await?;
 
     let server = service.serve(stdio()).await.inspect_err(|e| {
         tracing::error!("MCP serving error: {:?}", e);

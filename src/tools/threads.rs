@@ -243,3 +243,26 @@ pub async fn list_public_archived_threads(
         Err(e) => deserialize_error(e),
     }
 }
+
+// -- list_private_archived_threads --
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ListPrivateArchivedThreadsParams {
+    /// The parent channel ID
+    pub channel_id: String,
+}
+
+pub async fn list_private_archived_threads(
+    discord: &Arc<Client>,
+    params: ListPrivateArchivedThreadsParams,
+) -> Result<CallToolResult, rmcp::ErrorData> {
+    let channel_id = parse_id(&params.channel_id)?;
+    let response = match discord.private_archived_threads(channel_id).await {
+        Ok(r) => r,
+        Err(e) => return discord_api_error(e),
+    };
+    match response.model().await {
+        Ok(threads) => json_result(&threads),
+        Err(e) => deserialize_error(e),
+    }
+}

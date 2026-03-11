@@ -4,7 +4,7 @@ A Rust-based [MCP](https://modelcontextprotocol.io/) server that exposes the Dis
 
 ## Features
 
-- **86 tools** covering the Discord REST API
+- **152 tools** covering the Discord REST API
 - Stdio transport (works with any MCP client)
 - Automatic rate limiting via [twilight-http](https://github.com/twilight-rs/twilight)
 - Discord API errors returned as tool results so the LLM can reason about them
@@ -14,26 +14,42 @@ A Rust-based [MCP](https://modelcontextprotocol.io/) server that exposes the Dis
 | Category | Tools | Examples |
 |---|---|---|
 | Discovery | 3 | Get bot info, list guilds, guild details |
-| Channels | 6 | List, create, update, delete, reorder |
+| Channels | 8 | List, create, update, delete, reorder, follow announcements, typing |
 | Messages | 10 | Send, edit, delete, bulk delete, pin/unpin, crosspost |
 | Reactions | 5 | Add, remove, list, clear reactions |
 | Members | 5 | List, search, update, kick |
-| Bans | 4 | List, get, ban, unban |
+| Bans | 5 | List, get, ban, unban, bulk ban |
 | Roles | 6 | CRUD, assign/remove from members |
-| Threads | 9 | Create, join/leave, manage members, list active/archived |
+| Threads | 10 | Create, join/leave, manage members, list active/archived |
 | Webhooks | 7 | CRUD, execute |
 | Invites | 5 | List, get, create, delete |
-| Emojis | 5 | CRUD |
-| Stickers | 3 | List, get, delete |
-| Auto Moderation | 3 | List, get, delete rules |
-| Scheduled Events | 4 | List, get, delete, list users |
+| Emojis | 9 | Guild & application emoji CRUD |
+| Stickers | 5 | List, get, delete, sticker packs |
+| Auto Moderation | 5 | CRUD rules |
+| Scheduled Events | 6 | CRUD, list users |
 | Audit Log | 1 | Query audit log with filters |
-| Guild Settings | 8 | Update guild, prune, vanity URL, welcome screen, widget, voice regions, preview |
+| Guild Settings | 11 | Update guild, prune, vanity URL, welcome screen, widget, voice regions, preview, create/delete guild, integrations |
 | Permissions | 2 | Set/delete channel permission overwrites |
+| Stage Instances | 4 | Create, get, update, delete stage instances |
+| Voice | 3 | List regions, update voice states |
+| Users | 4 | Get user, create DM, leave guild, connections |
+| Application Commands | 8 | Global & guild slash command CRUD |
+| Interactions | 8 | Respond to interactions, followup messages |
+| Guild Templates | 6 | CRUD, sync templates |
+| Polls | 2 | Get answer voters, end poll |
+| Soundboard | 7 | Default & guild soundboard sounds CRUD, send sounds |
+| Monetization | 7 | SKUs, entitlements, subscriptions |
 
 ## Prerequisites
 
 - A Discord bot token ([create one here](https://discord.com/developers/applications))
+
+## Environment Variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `DISCORD_TOKEN` | Yes | Your Discord bot token |
+| `DISCORD_APPLICATION_ID` | No | Application ID (auto-detected from bot user if not set) |
 
 ## Setup
 
