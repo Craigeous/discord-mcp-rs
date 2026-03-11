@@ -4,7 +4,7 @@ use rmcp::schemars;
 use serde::Deserialize;
 use twilight_http::Client;
 
-use crate::error::{discord_api_error, deserialize_error, json_result};
+use crate::error::{discord_api_error, deserialize_error, json_result, text_result};
 use crate::util::parse_id;
 
 // -- update_guild --
@@ -16,6 +16,7 @@ pub struct UpdateGuildParams {
     /// New guild name
     pub name: Option<String>,
     /// New guild description
+    #[allow(dead_code)]
     pub description: Option<String>,
 }
 
@@ -222,5 +223,92 @@ pub async fn get_guild_preview(
     match response.model().await {
         Ok(preview) => json_result(&preview),
         Err(e) => deserialize_error(e),
+    }
+}
+
+// -- delete_guild --
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct DeleteGuildParams {
+    /// The guild (server) ID to delete (bot must be owner)
+    pub guild_id: String,
+}
+
+pub async fn delete_guild(
+    discord: &Arc<Client>,
+    params: DeleteGuildParams,
+) -> Result<CallToolResult, rmcp::ErrorData> {
+    let guild_id = parse_id(&params.guild_id)?;
+    match discord.delete_guild(guild_id).await {
+        Ok(_) => text_result("Guild deleted"),
+        Err(e) => discord_api_error(e),
+    }
+}
+
+// -- get_guild_integrations --
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct GetGuildIntegrationsParams {
+    /// The guild (server) ID
+    pub guild_id: String,
+}
+
+pub async fn get_guild_integrations(
+    discord: &Arc<Client>,
+    params: GetGuildIntegrationsParams,
+) -> Result<CallToolResult, rmcp::ErrorData> {
+    let guild_id = parse_id(&params.guild_id)?;
+    let response = match discord.guild_integrations(guild_id).await {
+        Ok(r) => r,
+        Err(e) => return discord_api_error(e),
+    };
+    match response.models().await {
+        Ok(integrations) => json_result(&integrations),
+        Err(e) => deserialize_error(e),
+    }
+}
+
+// -- create_guild (raw HTTP) --
+
+use serde_json::Value;
+use crate::server::DiscordMcpServer;
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct CreateGuildParams {
+    /// Guild name (2-100 characters)
+    pub name: String,
+}
+
+pub async fn create_guild(
+    server: &DiscordMcpServer,
+    params: CreateGuildParams,
+) -> Result<CallToolResult, rmcp::ErrorData> {
+    let body = serde_json::json!({ "name": params.name });
+
+    let resp = server
+        .raw_request(reqwest::Method::POST, "/guilds")
+        .json(&body)
+        .send()
+        .await;
+
+    match resp {
+        Ok(r) if r.status().is_success() => {
+            let data: Value = r.json().await.map_err(|e| {
+                rmcp::ErrorData::internal_error(format!("JSON parse error: {e}"), None)
+            })?;
+            json_result(&data)
+        }
+        Ok(r) => {
+            let status = r.status();
+            let text = r.text().await.unwrap_or_default();
+            let msg = format!("Discord API error ({status}): {text}");
+            tracing::warn!("{msg}");
+            Ok(CallToolResult::error(vec![rmcp::model::Content::text(msg)]))
+        }
+        Err(e) => {
+            let msg = format!("Request error: {e}");
+            tracing::warn!("{msg}");
+            Ok(CallToolResult::error(vec![rmcp::model::Content::text(msg)]))
+        }
     }
 }

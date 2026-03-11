@@ -77,3 +77,46 @@ pub async fn delete_guild_sticker(
         Err(e) => discord_api_error(e),
     }
 }
+
+// -- get_sticker --
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct GetStickerParams {
+    /// The sticker ID
+    pub sticker_id: String,
+}
+
+pub async fn get_sticker(
+    discord: &Arc<Client>,
+    params: GetStickerParams,
+) -> Result<CallToolResult, rmcp::ErrorData> {
+    let sticker_id = parse_id(&params.sticker_id)?;
+    let response = match discord.sticker(sticker_id).await {
+        Ok(r) => r,
+        Err(e) => return discord_api_error(e),
+    };
+    match response.model().await {
+        Ok(sticker) => json_result(&sticker),
+        Err(e) => deserialize_error(e),
+    }
+}
+
+// -- list_sticker_packs --
+
+pub async fn list_sticker_packs(
+    discord: &Arc<Client>,
+) -> Result<CallToolResult, rmcp::ErrorData> {
+    let response = match discord.nitro_sticker_packs().await {
+        Ok(r) => r,
+        Err(e) => return discord_api_error(e),
+    };
+    // StickerPackListing doesn't implement Serialize, so use the raw bytes
+    let bytes = match response.bytes().await {
+        Ok(b) => b,
+        Err(e) => return deserialize_error(e),
+    };
+    let json: serde_json::Value = serde_json::from_slice(&bytes).map_err(|e| {
+        rmcp::ErrorData::internal_error(format!("JSON parse error: {e}"), None)
+    })?;
+    json_result(&json)
+}

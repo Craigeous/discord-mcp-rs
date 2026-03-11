@@ -3,6 +3,7 @@ use rmcp::model::CallToolResult;
 use rmcp::schemars;
 use serde::Deserialize;
 use twilight_http::Client;
+use twilight_model::id::{marker::ApplicationMarker, Id};
 
 use crate::error::{discord_api_error, deserialize_error, json_result, text_result};
 use crate::util::parse_id;
@@ -139,6 +140,106 @@ pub async fn delete_emoji(
     let emoji_id = parse_id(&params.emoji_id)?;
     match discord.delete_emoji(guild_id, emoji_id).await {
         Ok(_) => text_result("Emoji deleted successfully"),
+        Err(e) => discord_api_error(e),
+    }
+}
+
+// ========================
+// APPLICATION EMOJIS
+// ========================
+
+// -- list_application_emojis --
+
+pub async fn list_application_emojis(
+    discord: &Arc<Client>,
+    application_id: Id<ApplicationMarker>,
+) -> Result<CallToolResult, rmcp::ErrorData> {
+    let response = match discord.get_application_emojis(application_id).await {
+        Ok(r) => r,
+        Err(e) => return discord_api_error(e),
+    };
+    match response.model().await {
+        Ok(emojis) => json_result(&emojis),
+        Err(e) => deserialize_error(e),
+    }
+}
+
+// -- create_application_emoji --
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct CreateApplicationEmojiParams {
+    /// Emoji name
+    pub name: String,
+    /// Base64-encoded image data (data URI format: data:image/png;base64,...)
+    pub image: String,
+}
+
+pub async fn create_application_emoji(
+    discord: &Arc<Client>,
+    application_id: Id<ApplicationMarker>,
+    params: CreateApplicationEmojiParams,
+) -> Result<CallToolResult, rmcp::ErrorData> {
+    let response = match discord
+        .add_application_emoji(application_id, &params.name, &params.image)
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => return discord_api_error(e),
+    };
+    match response.model().await {
+        Ok(emoji) => json_result(&emoji),
+        Err(e) => deserialize_error(e),
+    }
+}
+
+// -- update_application_emoji --
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct UpdateApplicationEmojiParams {
+    /// The emoji ID
+    pub emoji_id: String,
+    /// New emoji name
+    pub name: String,
+}
+
+pub async fn update_application_emoji(
+    discord: &Arc<Client>,
+    application_id: Id<ApplicationMarker>,
+    params: UpdateApplicationEmojiParams,
+) -> Result<CallToolResult, rmcp::ErrorData> {
+    let emoji_id = parse_id(&params.emoji_id)?;
+    let response = match discord
+        .update_application_emoji(application_id, emoji_id, &params.name)
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => return discord_api_error(e),
+    };
+    match response.model().await {
+        Ok(emoji) => json_result(&emoji),
+        Err(e) => deserialize_error(e),
+    }
+}
+
+// -- delete_application_emoji --
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct DeleteApplicationEmojiParams {
+    /// The emoji ID
+    pub emoji_id: String,
+}
+
+pub async fn delete_application_emoji(
+    discord: &Arc<Client>,
+    application_id: Id<ApplicationMarker>,
+    params: DeleteApplicationEmojiParams,
+) -> Result<CallToolResult, rmcp::ErrorData> {
+    let emoji_id = parse_id(&params.emoji_id)?;
+    match discord
+        .delete_application_emoji(application_id, emoji_id)
+        .await
+    {
+        Ok(_) => text_result("Application emoji deleted"),
         Err(e) => discord_api_error(e),
     }
 }

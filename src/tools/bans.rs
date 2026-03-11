@@ -108,3 +108,60 @@ pub async fn unban_member(
         Err(e) => discord_api_error(e),
     }
 }
+
+// -- bulk_guild_ban (raw HTTP) --
+
+use serde_json::Value;
+use crate::server::DiscordMcpServer;
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct BulkGuildBanParams {
+    /// The guild (server) ID
+    pub guild_id: String,
+    /// List of user IDs to ban (max 200)
+    pub user_ids: Vec<String>,
+    /// Number of seconds of messages to delete (0-604800, i.e. up to 7 days)
+    pub delete_message_seconds: Option<u32>,
+}
+
+pub async fn bulk_guild_ban(
+    server: &DiscordMcpServer,
+    params: BulkGuildBanParams,
+) -> Result<CallToolResult, rmcp::ErrorData> {
+    let mut body = serde_json::json!({
+        "user_ids": params.user_ids,
+    });
+    if let Some(seconds) = params.delete_message_seconds {
+        body["delete_message_seconds"] = serde_json::json!(seconds);
+    }
+
+    let resp = server
+        .raw_request(
+            reqwest::Method::POST,
+            &format!("/guilds/{}/bulk-ban", params.guild_id),
+        )
+        .json(&body)
+        .send()
+        .await;
+
+    match resp {
+        Ok(r) if r.status().is_success() => {
+            let data: Value = r.json().await.map_err(|e| {
+                rmcp::ErrorData::internal_error(format!("JSON parse error: {e}"), None)
+            })?;
+            crate::error::json_result(&data)
+        }
+        Ok(r) => {
+            let status = r.status();
+            let text = r.text().await.unwrap_or_default();
+            let msg = format!("Discord API error ({status}): {text}");
+            tracing::warn!("{msg}");
+            Ok(CallToolResult::error(vec![rmcp::model::Content::text(msg)]))
+        }
+        Err(e) => {
+            let msg = format!("Request error: {e}");
+            tracing::warn!("{msg}");
+            Ok(CallToolResult::error(vec![rmcp::model::Content::text(msg)]))
+        }
+    }
+}
