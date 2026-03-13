@@ -5,7 +5,7 @@ use serde::Deserialize;
 use twilight_http::Client;
 
 use crate::error::{discord_api_error, deserialize_error, json_result, text_result};
-use crate::util::parse_id;
+use crate::util::{parse_id, read_file_as_data_uri};
 
 // -- get_user --
 
@@ -83,6 +83,42 @@ pub async fn get_current_user_connections(
     };
     match response.models().await {
         Ok(connections) => json_result(&connections),
+        Err(e) => deserialize_error(e),
+    }
+}
+
+// -- update_current_user --
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct UpdateCurrentUserParams {
+    /// New username
+    pub username: Option<String>,
+    /// Path to new avatar image file (png, jpg, gif, webp), or null to remove
+    pub avatar_file_path: Option<String>,
+}
+
+pub async fn update_current_user(
+    discord: &Arc<Client>,
+    params: UpdateCurrentUserParams,
+) -> Result<CallToolResult, rmcp::ErrorData> {
+    let mut req = discord.update_current_user();
+
+    if let Some(ref username) = params.username {
+        req = req.username(username);
+    }
+
+    let avatar_data;
+    if let Some(ref path) = params.avatar_file_path {
+        avatar_data = read_file_as_data_uri(path)?;
+        req = req.avatar(Some(&avatar_data));
+    }
+
+    let response = match req.await {
+        Ok(r) => r,
+        Err(e) => return discord_api_error(e),
+    };
+    match response.model().await {
+        Ok(user) => json_result(&user),
         Err(e) => deserialize_error(e),
     }
 }

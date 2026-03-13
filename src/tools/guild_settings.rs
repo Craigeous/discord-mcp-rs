@@ -5,7 +5,7 @@ use serde::Deserialize;
 use twilight_http::Client;
 
 use crate::error::{discord_api_error, deserialize_error, json_result, text_result};
-use crate::util::parse_id;
+use crate::util::{parse_id, read_file_as_data_uri};
 
 // -- update_guild --
 
@@ -18,6 +18,14 @@ pub struct UpdateGuildParams {
     /// New guild description
     #[allow(dead_code)]
     pub description: Option<String>,
+    /// Path to new guild icon image file (png, jpg, gif, webp)
+    pub icon_file_path: Option<String>,
+    /// Path to new guild banner image file (png, jpg, gif, webp) — requires BANNER feature
+    pub banner_file_path: Option<String>,
+    /// Path to new guild splash image file (png, jpg, gif, webp) — requires INVITE_SPLASH feature
+    pub splash_file_path: Option<String>,
+    /// Path to new guild discovery splash image file (png, jpg, gif, webp) — requires DISCOVERABLE feature
+    pub discovery_splash_file_path: Option<String>,
 }
 
 pub async fn update_guild(
@@ -30,6 +38,30 @@ pub async fn update_guild(
 
     if let Some(ref name) = params.name {
         req = req.name(name.as_str());
+    }
+
+    let icon_data;
+    if let Some(ref path) = params.icon_file_path {
+        icon_data = read_file_as_data_uri(path)?;
+        req = req.icon(Some(&icon_data));
+    }
+
+    let banner_data;
+    if let Some(ref path) = params.banner_file_path {
+        banner_data = read_file_as_data_uri(path)?;
+        req = req.banner(Some(&banner_data));
+    }
+
+    let splash_data;
+    if let Some(ref path) = params.splash_file_path {
+        splash_data = read_file_as_data_uri(path)?;
+        req = req.splash(Some(&splash_data));
+    }
+
+    let discovery_splash_data;
+    if let Some(ref path) = params.discovery_splash_file_path {
+        discovery_splash_data = read_file_as_data_uri(path)?;
+        req = req.discovery_splash(Some(&discovery_splash_data));
     }
 
     let response = match req.await {

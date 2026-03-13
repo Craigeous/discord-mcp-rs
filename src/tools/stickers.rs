@@ -56,6 +56,45 @@ pub async fn get_guild_sticker(
     }
 }
 
+// -- create_guild_sticker --
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct CreateGuildStickerParams {
+    /// The guild (server) ID
+    pub guild_id: String,
+    /// Sticker name (2-30 characters)
+    pub name: String,
+    /// Sticker description (2-100 characters)
+    pub description: String,
+    /// Comma-separated autocomplete tags for the sticker (max 200 characters)
+    pub tags: String,
+    /// Path to the sticker image file (png, apng, gif, or json for Lottie)
+    pub file_path: String,
+}
+
+pub async fn create_guild_sticker(
+    discord: &Arc<Client>,
+    params: CreateGuildStickerParams,
+) -> Result<CallToolResult, rmcp::ErrorData> {
+    let guild_id = parse_id(&params.guild_id)?;
+
+    let file_bytes = std::fs::read(&params.file_path).map_err(|e| {
+        rmcp::ErrorData::invalid_params(format!("Failed to read file: {e}"), None)
+    })?;
+
+    let response = match discord
+        .create_guild_sticker(guild_id, &params.name, &params.description, &params.tags, &file_bytes)
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => return discord_api_error(e),
+    };
+    match response.model().await {
+        Ok(sticker) => json_result(&sticker),
+        Err(e) => deserialize_error(e),
+    }
+}
+
 // -- delete_guild_sticker --
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]

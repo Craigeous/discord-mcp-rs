@@ -6,7 +6,7 @@ use twilight_http::Client;
 use twilight_model::id::{marker::ApplicationMarker, Id};
 
 use crate::error::{discord_api_error, deserialize_error, json_result, text_result};
-use crate::util::parse_id;
+use crate::util::{parse_id, read_file_as_data_uri};
 
 // -- list_emojis --
 
@@ -65,8 +65,8 @@ pub struct CreateEmojiParams {
     pub guild_id: String,
     /// Emoji name
     pub name: String,
-    /// Base64-encoded image data (data URI format: data:image/png;base64,...)
-    pub image: String,
+    /// Path to the image file (png, jpg, gif, webp)
+    pub file_path: String,
 }
 
 pub async fn create_emoji(
@@ -74,8 +74,9 @@ pub async fn create_emoji(
     params: CreateEmojiParams,
 ) -> Result<CallToolResult, rmcp::ErrorData> {
     let guild_id = parse_id(&params.guild_id)?;
+    let image = read_file_as_data_uri(&params.file_path)?;
     let response = match discord
-        .create_emoji(guild_id, &params.name, &params.image)
+        .create_emoji(guild_id, &params.name, &image)
         .await
     {
         Ok(r) => r,
@@ -170,8 +171,8 @@ pub async fn list_application_emojis(
 pub struct CreateApplicationEmojiParams {
     /// Emoji name
     pub name: String,
-    /// Base64-encoded image data (data URI format: data:image/png;base64,...)
-    pub image: String,
+    /// Path to the image file (png, jpg, gif)
+    pub file_path: String,
 }
 
 pub async fn create_application_emoji(
@@ -179,8 +180,10 @@ pub async fn create_application_emoji(
     application_id: Id<ApplicationMarker>,
     params: CreateApplicationEmojiParams,
 ) -> Result<CallToolResult, rmcp::ErrorData> {
+    let image = read_file_as_data_uri(&params.file_path)?;
+
     let response = match discord
-        .add_application_emoji(application_id, &params.name, &params.image)
+        .add_application_emoji(application_id, &params.name, &image)
         .await
     {
         Ok(r) => r,
