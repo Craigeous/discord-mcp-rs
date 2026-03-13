@@ -5,6 +5,7 @@ use serde_json::Value;
 
 use crate::error::{json_result, text_result};
 use crate::server::DiscordMcpServer;
+use crate::util::read_file_as_data_uri;
 
 fn raw_error(msg: impl Into<String>) -> Result<CallToolResult, rmcp::ErrorData> {
     let msg = msg.into();
@@ -166,8 +167,8 @@ pub struct CreateGuildSoundboardSoundParams {
     pub guild_id: String,
     /// Sound name (2-32 characters)
     pub name: String,
-    /// Base64-encoded audio data (MP3 or OGG, max 512KB)
-    pub sound: String,
+    /// Path to the audio file (mp3 or ogg, max 512KB)
+    pub file_path: String,
     /// Volume of the sound (0.0 to 1.0, default 1.0)
     pub volume: Option<f64>,
     /// Unicode emoji for the sound
@@ -180,9 +181,11 @@ pub async fn create_guild_soundboard_sound(
     server: &DiscordMcpServer,
     params: CreateGuildSoundboardSoundParams,
 ) -> Result<CallToolResult, rmcp::ErrorData> {
+    let sound = read_file_as_data_uri(&params.file_path)?;
+
     let mut body = serde_json::json!({
         "name": params.name,
-        "sound": params.sound,
+        "sound": sound,
     });
     if let Some(vol) = params.volume {
         body["volume"] = serde_json::json!(vol);

@@ -29,5 +29,8 @@ rustls = { version = "0.23", features = ["ring"] }
 # HTTP client for raw Discord API calls (endpoints not in twilight-http)
 reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
 
+# Base64 encoding for image uploads
+base64 = "0.22"
+
 # Error handling
 anyhow = "1"

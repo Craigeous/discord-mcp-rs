@@ -655,6 +655,14 @@ impl DiscordMcpServer {
         tools::stickers::delete_guild_sticker(&self.discord, params).await
     }
 
+    #[tool(description = "Create a guild sticker from an image file (png, apng, gif, or Lottie json)")]
+    async fn create_guild_sticker(
+        &self,
+        Parameters(params): Parameters<tools::stickers::CreateGuildStickerParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::stickers::create_guild_sticker(&self.discord, params).await
+    }
+
     // ========================
     // AUTO MODERATION
     // ========================
@@ -911,6 +919,14 @@ impl DiscordMcpServer {
     #[tool(description = "Get the current user's connected accounts (Twitch, YouTube, etc.)")]
     async fn get_current_user_connections(&self) -> Result<CallToolResult, rmcp::ErrorData> {
         tools::users::get_current_user_connections(&self.discord).await
+    }
+
+    #[tool(description = "Update the current bot user's username or avatar image")]
+    async fn update_current_user(
+        &self,
+        Parameters(params): Parameters<tools::users::UpdateCurrentUserParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        tools::users::update_current_user(&self.discord, params).await
     }
 
     // ========================

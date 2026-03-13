@@ -43,16 +43,12 @@ pub async fn create_interaction_response(
         }
     };
 
-    let data = if let Some(ref content) = params.content {
-        Some(
-            twilight_model::http::interaction::InteractionResponseData {
-                content: Some(content.clone()),
-                ..Default::default()
-            },
-        )
-    } else {
-        None
-    };
+    let data = params.content.as_ref().map(|content| {
+        twilight_model::http::interaction::InteractionResponseData {
+            content: Some(content.clone()),
+            ..Default::default()
+        }
+    });
 
     let response = twilight_model::http::interaction::InteractionResponse {
         kind: response_type,
