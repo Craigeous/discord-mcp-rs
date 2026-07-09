@@ -1,36 +1,35 @@
 [package]
 name = "discord-mcp-rs"
-version = "0.1.0"
-edition = "2021"
-description = "Discord MCP server exposing the Discord REST API as MCP tools"
+version = "0.2.0"
+edition = "2024"
+rust-version = "1.94"
+description = "Discord MCP server that generates its tools dynamically from Discord's official OpenAPI spec"
 
 [dependencies]
 # MCP SDK
-rmcp = { version = "0.17", features = ["server", "transport-io"] }
-
-# Discord REST client
-twilight-http = "0.17"
-twilight-model = "0.17"
+rmcp = { version = "2.1", features = ["server", "transport-io"] }
 
 # Async runtime
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-std"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-std", "time", "fs"] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde_json = { version = "1", features = ["preserve_order"] }
 
-# Logging (must write to stderr to avoid polluting stdio MCP transport)
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "std", "fmt"] }
+# HTTP client for Discord REST calls (json + multipart file uploads).
+# rustls-no-provider + webpki-roots => uses the process-default ring provider
+# installed in main.rs, with bundled CA roots (no native-tls / aws-lc-rs).
+reqwest = { version = "0.13", features = ["json", "multipart", "query", "rustls-no-provider", "webpki-roots"], default-features = false }
 
 # TLS crypto provider (required by rustls)
 rustls = { version = "0.23", features = ["ring"] }
 
-# HTTP client for raw Discord API calls (endpoints not in twilight-http)
-reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+# Percent-encoding for path parameter substitution
+percent-encoding = "2"
 
-# Base64 encoding for image uploads
-base64 = "0.22"
+# Logging (must write to stderr to avoid polluting the stdio MCP transport)
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "std", "fmt"] }
 
 # Error handling
 anyhow = "1"
