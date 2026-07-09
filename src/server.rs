@@ -223,7 +223,12 @@ impl ServerHandler for DiscordMcpServer {
         info.protocol_version = ProtocolVersion::LATEST;
         info.capabilities = ServerCapabilities::builder().enable_tools().build();
         info.server_info.name = "discord-mcp-rs".to_string();
-        info.server_info.version = env!("CARGO_PKG_VERSION").to_string();
+        // Include the git commit as semver build metadata so a connected client
+        // can tell exactly which build is running (all releases share 0.2.0).
+        info.server_info.version = match env!("GIT_HASH") {
+            "unknown" => env!("CARGO_PKG_VERSION").to_string(),
+            git => format!("{}+{}", env!("CARGO_PKG_VERSION"), git),
+        };
         info.instructions = Some(
             "Discord REST API as MCP tools, generated from Discord's official OpenAPI \
              spec. Each tool is named after its operationId. Pass path and query \
