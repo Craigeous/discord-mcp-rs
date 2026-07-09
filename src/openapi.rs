@@ -290,6 +290,7 @@ fn build_operation(
 
     let mut input_val = Value::Object(input);
     rewrite_refs(&mut input_val);
+    clamp_ints_to_i32(&mut input_val);
     let input_obj: JsonObject = match input_val {
         Value::Object(m) => m,
         _ => unreachable!("input schema is always an object"),
@@ -469,6 +470,52 @@ fn rewrite_refs(v: &mut Value) {
     }
 }
 
+/// Clamp every integer literal in a schema to the signed 32-bit range.
+///
+/// Discord's spec uses bounds larger than i32 (e.g. `nonce` spans the full
+/// i64 range, `permissions` maxes at 2^54-1). The Anthropic tools API converts
+/// schema numeric bounds to a 32-bit int and rejects the whole tool list with
+/// "int too big to convert" if any bound overflows. These bounds are advisory
+/// to the model only — the actual `body` we send to Discord is passed through
+/// untouched — so clamping them keeps the schema valid without constraining
+/// real requests.
+fn clamp_ints_to_i32(v: &mut Value) {
+    const I32_MIN: i64 = i32::MIN as i64;
+    const I32_MAX: i64 = i32::MAX as i64;
+    match v {
+        Value::Number(n) => {
+            let clamped: Option<i64> = if let Some(i) = n.as_i64() {
+                (i > I32_MAX || i < I32_MIN).then_some(i.clamp(I32_MIN, I32_MAX))
+            } else if let Some(u) = n.as_u64() {
+                (u > I32_MAX as u64).then_some(I32_MAX)
+            } else if let Some(f) = n.as_f64() {
+                // Only integer-valued floats out of range; leave real fractions.
+                if f.fract() == 0.0 && (f > I32_MAX as f64 || f < I32_MIN as f64) {
+                    Some(if f > 0.0 { I32_MAX } else { I32_MIN })
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            if let Some(c) = clamped {
+                *v = Value::Number(c.into());
+            }
+        }
+        Value::Object(m) => {
+            for val in m.values_mut() {
+                clamp_ints_to_i32(val);
+            }
+        }
+        Value::Array(a) => {
+            for val in a.iter_mut() {
+                clamp_ints_to_i32(val);
+            }
+        }
+        _ => {}
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -526,6 +573,35 @@ mod tests {
         match &op.file_mode {
             FileMode::Named(fields) => assert_eq!(fields, &vec!["file".to_string()]),
             other => panic!("expected Named file mode, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn no_schema_integer_exceeds_i32() {
+        // The Anthropic tools API rejects integer bounds outside i32 range.
+        fn check(v: &Value, tool: &str) {
+            match v {
+                Value::Number(n) => {
+                    if let Some(i) = n.as_i64() {
+                        assert!(
+                            (i32::MIN as i64..=i32::MAX as i64).contains(&i),
+                            "{tool}: integer {i} out of i32 range"
+                        );
+                    }
+                    assert!(
+                        n.as_u64().map(|u| u <= i32::MAX as u64).unwrap_or(true),
+                        "{tool}: unsigned integer out of i32 range"
+                    );
+                }
+                Value::Object(m) => m.values().for_each(|x| check(x, tool)),
+                Value::Array(a) => a.iter().for_each(|x| check(x, tool)),
+                _ => {}
+            }
+        }
+        let reg = Registry::from_spec_str(SPEC).expect("spec parses");
+        for op in &reg.operations {
+            let schema = Value::Object((*op.tool.input_schema).clone());
+            check(&schema, &op.operation_id);
         }
     }
 }
