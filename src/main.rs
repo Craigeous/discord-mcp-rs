@@ -2,10 +2,8 @@ use anyhow::Result;
 use rmcp::{ServiceExt, transport::stdio};
 use tracing_subscriber::{self, EnvFilter};
 
-mod error;
+mod openapi;
 mod server;
-mod tools;
-mod util;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -13,11 +11,10 @@ async fn main() -> Result<()> {
         .install_default()
         .expect("Failed to install rustls crypto provider");
 
-    // Logging must go to stderr — stdout is the MCP stdio transport
+    // Logging must go to stderr — stdout is the MCP stdio transport.
     tracing_subscriber::fmt()
         .with_env_filter(
-            EnvFilter::from_default_env()
-                .add_directive(tracing::Level::INFO.into()),
+            EnvFilter::from_default_env().add_directive(tracing::Level::INFO.into()),
         )
         .with_writer(std::io::stderr)
         .with_ansi(false)
@@ -25,7 +22,7 @@ async fn main() -> Result<()> {
 
     tracing::info!("Starting Discord MCP server");
 
-    let service = server::DiscordMcpServer::from_env().await?;
+    let service = server::DiscordMcpServer::from_env()?;
 
     let server = service.serve(stdio()).await.inspect_err(|e| {
         tracing::error!("MCP serving error: {:?}", e);
